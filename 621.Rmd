@@ -1,6 +1,6 @@
 ---
 title: "621 Project"
-author: "Bo Wang"
+author: "Bo Wang, Jinru Zhang, Perry Adu, Zihao Wang"
 date: "2021/4/7"
 output: pdf_document
 ---
@@ -42,6 +42,7 @@ ggplot(data=comm, aes(x=Mode_of_Shipment))+geom_bar()
 ```
 
 # Logistic regression
+## Need to redo
 ```{r}
 mylogit<- glm(Reached.on.Time_Y.N~ as.factor(Mode_of_Shipment)+as.factor(Warehouse_block)+Customer_care_calls+Customer_rating+Cost_of_the_Product+as.factor(Product_importance)+Discount_offered, data=comm, family = 'binomial')
 summary(mylogit)
@@ -49,3 +50,17 @@ plot(mylogit)
 abline(0,0)
 ```
 
+# KNN method
+```{r}
+
+```
+
+# Classification tree
+```{r}
+
+```
+
+# Any other method 
+```{r}
+
+```
