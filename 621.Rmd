@@ -1,0 +1,51 @@
+---
+title: "621 Project"
+author: "Bo Wang"
+date: "2021/4/7"
+output: pdf_document
+---
+
+```{r}
+setwd('F:/Data science/2021 Spring/ITEC-621/project')
+comm<- read.csv('./ecommerce.csv', header = T)
+comm<- na.omit(comm)
+library(tidyverse)
+library(corrplot)
+library(RColorBrewer)
+comm<- comm[, -1]
+model <- glm(Reached.on.Time_Y.N~. , data = comm, family = binomial(link = "logit"))
+summary(model)
+
+model <- glm(Reached.on.Time_Y.N~. , data = comm, family = binomial(link = "logit"))
+summary(model)
+plot(model)
+```
+
+```{r}
+# Translate the TURE and FALSE to 1 and 0.
+comm<- comm %>% mutate (Reached_On_Time= as.logical(Reached.on.Time_Y.N)) 
+comm<- comm[,-12] %>% na.omit(comm)
+library(corrplot)
+corrplot(comm)
+```
+
+```{r}
+filtered_data<-comm %>% filter(Customer_rating>3)
+head(filtered_data)
+ggplot(filtered_data)+geom_bar(mapping=aes(x=Reached_On_Time))
+```
+
+```{r}
+
+ggplot(data=comm, aes(x=Mode_of_Shipment))+geom_bar()
+
+```
+
+# Logistic regression
+```{r}
+mylogit<- glm(Reached.on.Time_Y.N~ as.factor(Mode_of_Shipment)+as.factor(Warehouse_block)+Customer_care_calls+Customer_rating+Cost_of_the_Product+as.factor(Product_importance)+Discount_offered, data=comm, family = 'binomial')
+summary(mylogit)
+plot(mylogit)
+abline(0,0)
+```
+
