@@ -50,12 +50,17 @@ plot(mylogit)
 abline(0,0)
 ```
 
-# KNN method
+# K-means method
 ```{r}
 
 ```
 
-# Classification tree
+# Bagging tree
+```{r}
+
+```
+
+# Random Forest
 ```{r}
 
 ```
