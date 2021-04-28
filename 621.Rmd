@@ -6,66 +6,132 @@ output: pdf_document
 ---
 
 ```{r}
-setwd('F:/Data science/2021 Spring/ITEC-621/project')
-comm<- read.csv('./ecommerce.csv', header = T)
-comm<- na.omit(comm)
 library(tidyverse)
+library(lmtest)
+library(leaps)
+```
+
+
+```{r}
+setwd('F:/Data science/2021 Spring/ITEC-621/project')
+data<- read.csv('./Train.csv', header = T)
+data_inUse <- data[ ,c(-1, -2)]
+data_inUse <- na.omit(data_inUse)
+data_inUse$Reached.on.Time_Y.N <- factor(data_inUse$Reached.on.Time_Y.N)
+head(data_inUse)
+str(data_inUse)
+```
+
+```{r}
+# Correlation between these variables.
 library(corrplot)
-library(RColorBrewer)
-comm<- comm[, -1]
-model <- glm(Reached.on.Time_Y.N~. , data = comm, family = binomial(link = "logit"))
-summary(model)
-
-model <- glm(Reached.on.Time_Y.N~. , data = comm, family = binomial(link = "logit"))
-summary(model)
-plot(model)
+corrplot(cor(data_inUse[, -c(1,2,7,8,11)]), method = "ellipse", type = "upper", order = "hclust", tl.col = "black", tl.srt = 45, addCoef.col = "grey")
 ```
 
 ```{r}
-# Translate the TURE and FALSE to 1 and 0.
-comm<- comm %>% mutate (Reached_On_Time= as.logical(Reached.on.Time_Y.N)) 
-comm<- comm[,-12] %>% na.omit(comm)
-library(corrplot)
-corrplot(comm)
+#Quantitative Variables (Xs)
+hist(data_inUse$Customer_care_calls)
+hist(data_inUse$Customer_rating)
+hist(data_inUse$Cost_of_the_Product)
+hist(data_inUse$Prior_purchases)#log
+hist(data_inUse$Discount_offered)#log 
+hist(data_inUse$Weight_in_gms) #piecewise
 ```
 
 ```{r}
-filtered_data<-comm %>% filter(Customer_rating>3)
-head(filtered_data)
-ggplot(filtered_data)+geom_bar(mapping=aes(x=Reached_On_Time))
+# Set the training and testing data.
+set.seed(123)
+train.custo.index <- sample(1:nrow(data_inUse), 0.6 * nrow(data_inUse))
+
+train.custo.df <- data_inUse[train.custo.index, ]
+testX.custo.df <- data_inUse[-train.custo.index, -10]
+testY.custo.df <- data_inUse[-train.custo.index, 10]
+
+str(train.custo.df)
+```
+
+# Modeling Methods and Model Specifications
+## Initial Logit Modeling
+
+```{r}
+log.fit <- glm(Reached.on.Time_Y.N~., data = train.custo.df, family = binomial(link = "logit"))
+plot(log.fit)
+summary(log.fit) #summary model
+log.odds <- coef(log.fit) 
+odds <- exp(log.odds)
+options(scipen=4) 
+print(cbind("Log-Odds"=log.odds, "Odds"=odds), digits=2)
 ```
 
 ```{r}
-
-ggplot(data=comm, aes(x=Mode_of_Shipment))+geom_bar()
-
+null.m<- glm(Reached.on.Time_Y.N~ 1, data= data_inUse,family = binomial(link = "logit"))
+full.m<- glm(Reached.on.Time_Y.N~., data= data_inUse, family = binomial(link = "logit"))
+step.model<- step(full.m, scope=list(lower=null.m, upper=full.m), direction = 'backward', test='F')
 ```
 
-# Logistic regression
-## Need to redo
 ```{r}
-mylogit<- glm(Reached.on.Time_Y.N~ as.factor(Mode_of_Shipment)+as.factor(Warehouse_block)+Customer_care_calls+Customer_rating+Cost_of_the_Product+as.factor(Product_importance)+Discount_offered, data=comm, family = 'binomial')
-summary(mylogit)
-plot(mylogit)
-abline(0,0)
+log.fit.log <- glm(Reached.on.Time_Y.N~ Customer_care_calls +  Customer_rating + 
+                     Cost_of_the_Product + log(Prior_purchases) + 
+                     log(Discount_offered) + Weight_in_gms  + 
+                     Product_importance, 
+                   data = train.custo.df, family = binomial(link = "logit"))
+
+plot(log.fit.log)
+summary(log.fit.log)
 ```
 
-# K-means method
 ```{r}
+log.odds.log <- coef(log.fit.log) 
+odds.log <- exp(log.odds.log)
+options(scipen=4) 
+print(cbind("Log-Odds-Transform"=log.odds.log, "Odds-Transform"=odds.log), digits=2)
 
+pred.log.null <- predict(log.fit.log, testX.custo.df, type = "response")
+pred.result.logNull <- ifelse(pred.log.null > 0.5, 1,0)
+
+pred.accuracyRate.log <- sum(pred.result.logNull == testY.custo.df)/length(pred.result.logNull)
+pred.accuracyRate.log #0.632
 ```
 
-# Bagging tree
-```{r}
-
-```
 
 # Random Forest
 ```{r}
+tunemtry <- 1:9 #using 9 variable is bagging
+best.model <- vector(mode = "list", length = 9)
+Best.tree <- rep(0,9)
+predicted <- vector(mode = "list", length = 9)
+acc.rate <- rep(0,9)
 
+testX.custo.df <- data_inUse[-train.custo.index, ]
+str(testX.custo.df)
+set.seed(123)
+
+for (i in seq_along(tunemtry)) {
+  rf <- randomForest(Reached.on.Time_Y.N ~ ., data=train.custo.df, ntree=500, mtry = tunemtry[i])
+  Best.tree[i] <- which.min(rf$err.rate[,1])
+  best.model[[i]] <- randomForest(Reached.on.Time_Y.N ~ ., data=train.custo.df, 
+                                  ntree=Best.tree[i], mtry = tunemtry[i])
+  predicted[[i]] <- predict(best.model[[i]], newdata=testX.custo.df[,-10])
+  acc.rate[i] <-  sum( predicted[[i]] == testX.custo.df$Reached.on.Time_Y.N ) / nrow(testX.custo.df)
+  
+}
+plot(tunemtry, acc.rate)
+title(main = "tune vs test acc rate")
+best<- best.model[1]
+max(acc.rate)
 ```
 
-# Any other method 
-```{r}
 
+```{r}
+## Now need specification
+```
+
+# Bootstrap Aggregation Regression Tree
+```{r}
+data.bag <- randomForest(Reached.on.Time_Y.N ~ ., data=train.custo.df, mtry = 9, importance=T)
+varImpPlot(data.bag) 
+importance(data.bag)
+pred_bag<- predict(data.bag, newdata = testX.custo.df[, -10])
+acc.rate.bag<- sum(pred_bag==testX.custo.df[, 10])/nrow(testX.custo.df)
+acc.rate.bag
 ```
