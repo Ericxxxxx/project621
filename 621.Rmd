@@ -173,14 +173,20 @@ acc.rate[3]
 
 # Classification Tree
 ```{r}
-product.tree <- tree(as.factor(Reached.on.Time_Y.N) ~ Customer_care_calls+
+product.tree <- tree(Reached.on.Time_Y.N ~ Customer_care_calls+
                        Cost_of_the_Product+log.Discount_offered+ 
                        Weight_in_gms+Product_importance+ log.Prior_purchases
                      ,data=train.custo.df,mindev=0.001)
-summary(product.tree)
-plot(product.tree)
-text(product.tree, pretty=0, cex=0.5)
+
+cv<- cv.tree(product.tree)
+which.min(cv$dev)
+cv$size[1]
+T_prune<- prune.misclass(product.tree, best=14)
+plot(T_prune, type = 'uniform')
+text(T_prune, cex=0.6)
 title("Classification Tree")
+
+summary(T_prune)
 ```
 ```{r}
 Yhat<- predict(product.tree, test.custo.df, type='class')
