@@ -5,10 +5,14 @@ date: "2021/4/7"
 output: pdf_document
 ---
 
+
+
 ```{r}
 library(tidyverse)
 library(lmtest)
 library(leaps)
+library(boot)
+library(ISLR)
 ```
 
 
@@ -18,14 +22,17 @@ data<- read.csv('./Train.csv', header = T)
 data_inUse <- data[ ,c(-1, -2)]
 data_inUse <- na.omit(data_inUse)
 data_inUse$Reached.on.Time_Y.N <- factor(data_inUse$Reached.on.Time_Y.N)
+data_inUse$log.Prior_purchases<- log(data_inUse$Prior_purchases)
+data_inUse$log.Discount_offered<- log(data_inUse$Discount_offered)
 head(data_inUse)
 str(data_inUse)
+
 ```
 
 ```{r}
 # Correlation between these variables.
 library(corrplot)
-corrplot(cor(data_inUse[, -c(1,2,7,8,11)]), method = "ellipse", type = "upper", order = "hclust", tl.col = "black", tl.srt = 45, addCoef.col = "grey")
+corrplot(cor(data_inUse[, -c(1,6,7,10, 11, 12)]), method = "ellipse", type = "upper", order = "hclust", tl.col = "black", tl.srt = 45, addCoef.col = "grey")
 ```
 
 ```{r}
@@ -38,8 +45,8 @@ hist(data_inUse$Discount_offered)#log
 hist(data_inUse$Weight_in_gms) #piecewise
 ```
 
+
 ```{r}
-# Set the training and testing data.
 set.seed(123)
 train.custo.index <- sample(1:nrow(data_inUse), 0.6 * nrow(data_inUse))
 
@@ -65,12 +72,16 @@ print(cbind("Log-Odds"=log.odds, "Odds"=odds), digits=2)
 
 ```{r}
 null.m<- glm(Reached.on.Time_Y.N~ 1, data= data_inUse,family = binomial(link = "logit"))
-full.m<- glm(Reached.on.Time_Y.N~., data= data_inUse, family = binomial(link = "logit"))
+full.m<- glm(Reached.on.Time_Y.N~Customer_care_calls +   
+                     Cost_of_the_Product + log(Prior_purchases) + 
+                     log(Discount_offered) + Weight_in_gms +  
+                     Mode_of_Shipment + Product_importance + Gender, data= data_inUse, family = binomial(link = "logit"))
 step.model<- step(full.m, scope=list(lower=null.m, upper=full.m), direction = 'backward', test='F')
 ```
+So we choose these variables: Customer_care_calls,  Cost_of_the_Product, log(Prior_purchases), log(Discount_offered), Weight_in_gms, Product_importance.
 
 ```{r}
-log.fit.log <- glm(Reached.on.Time_Y.N~ Customer_care_calls +  Customer_rating + 
+log.fit.log <- glm(Reached.on.Time_Y.N~ Customer_care_calls +  
                      Cost_of_the_Product + log(Prior_purchases) + 
                      log(Discount_offered) + Weight_in_gms  + 
                      Product_importance, 
@@ -86,52 +97,118 @@ odds.log <- exp(log.odds.log)
 options(scipen=4) 
 print(cbind("Log-Odds-Transform"=log.odds.log, "Odds-Transform"=odds.log), digits=2)
 
-pred.log.null <- predict(log.fit.log, testX.custo.df, type = "response")
-pred.result.logNull <- ifelse(pred.log.null > 0.5, 1,0)
-
 pred.accuracyRate.log <- sum(pred.result.logNull == testY.custo.df)/length(pred.result.logNull)
 pred.accuracyRate.log #0.632
+
+
+```
+
+```{r}
+pred.log.null <- predict(log.fit.log, test.custo.df, type = "response")
+pred.result.logNull <- ifelse(pred.log.null > 0.5, 1,0)
+conf.mat<- table('Predicted'=pred.result.logNull, testY.custo.df)
+conf.mat
+TruN <- conf.mat[1,1] 
+TruP <- conf.mat[2,2] 
+FalP <- conf.mat[2,1] 
+FalN <- conf.mat[1,2]
+TotP <- TruP + FalN 
+TotN <- TruN + FalP 
+Tot <- TotN + TotP 
+Accuracy <- (TruN + TruP) / Tot
+Error <- (FalN + FalP) / Tot
+Sensitivity <- TruP / Tot
+Specificity <- TruN / TotN
+FalsePos <- 1 - Specificity
+logit.rates.50<- cbind(Accuracy, Error, Sensitivity, Specificity, FalsePos)
+print(logit.rates.50,  digits=2)
+```
+
+
+```{r}
+train.custo.df <- data_inUse[train.custo.index, ]
+test.custo.df.log<- data_inUse[-train.custo.index, ]
+test.custo.df.log[, 5]<- log(test.custo.df.log[, 5])
+test.custo.df.log[, 8]<- log(test.custo.df.log[, 8])
 ```
 
 
 # Random Forest
 ```{r}
-tunemtry <- 1:9 #using 9 variable is bagging
-best.model <- vector(mode = "list", length = 9)
-Best.tree <- rep(0,9)
-predicted <- vector(mode = "list", length = 9)
-acc.rate <- rep(0,9)
+tunemtry <- 1:6 #using 9 variable is bagging
+best.model <- vector(mode = "list", length = 6)
+Best.tree <- rep(0,6)
+predicted <- vector(mode = "list", length = 6)
+acc.rate <- rep(0,6)
 
 testX.custo.df <- data_inUse[-train.custo.index, ]
 str(testX.custo.df)
 set.seed(123)
 
 for (i in seq_along(tunemtry)) {
-  rf <- randomForest(Reached.on.Time_Y.N ~ ., data=train.custo.df, ntree=500, mtry = tunemtry[i])
+  rf <- randomForest(Reached.on.Time_Y.N ~ Customer_care_calls+ Cost_of_the_Product+
+                                    log.Prior_purchases+ log.Discount_offered+
+                                    Weight_in_gms+Product_importance, data=train.custo.df, ntree=500, mtry = tunemtry[i])
   Best.tree[i] <- which.min(rf$err.rate[,1])
-  best.model[[i]] <- randomForest(Reached.on.Time_Y.N ~ ., data=train.custo.df, 
+  best.model[[i]] <- randomForest(Reached.on.Time_Y.N ~ Customer_care_calls+ Cost_of_the_Product+
+                                    log.Prior_purchases+ log.Discount_offered+
+                                    Weight_in_gms+Product_importance, data=train.custo.df, 
                                   ntree=Best.tree[i], mtry = tunemtry[i])
   predicted[[i]] <- predict(best.model[[i]], newdata=testX.custo.df[,-10])
   acc.rate[i] <-  sum( predicted[[i]] == testX.custo.df$Reached.on.Time_Y.N ) / nrow(testX.custo.df)
   
 }
+Best.tree[3]
 plot(tunemtry, acc.rate)
 title(main = "tune vs test acc rate")
 best<- best.model[1]
-max(acc.rate)
+acc.rate[3]
+# The accuracy is 66.5%
 ```
 
 
 ```{r}
 ## Now need specification
+regsub<- regsubsets(Reached.on.Time_Y.N~., data=train.custo.df, nvmax=20, method='backward')
+plot(regsub, scale='bic')
 ```
 
 # Bootstrap Aggregation Regression Tree
 ```{r}
-data.bag <- randomForest(Reached.on.Time_Y.N ~ ., data=train.custo.df, mtry = 9, importance=T)
+data.bag <- randomForest(Reached.on.Time_Y.N ~ Customer_care_calls +   
+                     Cost_of_the_Product + log.Prior_purchases + 
+                     log.Discount_offered + Weight_in_gms  + 
+                     Product_importance, data=train.custo.df, mtry = 6, importance=T)
+data.bag
 varImpPlot(data.bag) 
 importance(data.bag)
 pred_bag<- predict(data.bag, newdata = testX.custo.df[, -10])
 acc.rate.bag<- sum(pred_bag==testX.custo.df[, 10])/nrow(testX.custo.df)
 acc.rate.bag
+# The accuracy is 66%
+```
+```{r}
+log(train.custo.df$Prior_purchases)
+```
+
+# Compared the accuracy rate of three models
+```{r}
+plot<- data.frame(Model=factor(c('Logistic Regression', 'Random Forest', 'Bootstrap Aggregation Regression Tree')),
+                  acc.rate=c(0.632, 0.668, 0.66))
+ggplot(plot, aes(reorder(Model, acc.rate),acc.rate)) + 
+  geom_col() + theme_bw() + labs(title = "Accuracy Rate by Model") + 
+  xlab("Model") + ylab("Accuracy Rate") + coord_flip()
+```
+
+# Cross validation
+```{r}
+k<- 10
+set.seed(123)
+log.fit.log <- glm(Reached.on.Time_Y.N~ Customer_care_calls +  
+                     Cost_of_the_Product + log(Prior_purchases) + 
+                     log(Discount_offered) + Weight_in_gms  + 
+                     Product_importance, 
+                   data = train.custo.df, family = binomial(link = "logit"))
+cv.10k<- cv.glm(train.custo.df, log.fit.log, K=10)
+print(cv.10k$delta[1], digit=5)
 ```
