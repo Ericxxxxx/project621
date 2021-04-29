@@ -216,6 +216,44 @@ ggplot(plot, aes(reorder(Model, acc.rate),acc.rate)) +
   xlab("Model") + ylab("Accuracy Rate") + coord_flip()
 ```
 
+```{r}
+# ROC curve for classification tree is 0.73
+Yhat<- predict(product.tree, test.custo.df, type='class')
+pred <- prediction(as.numeric(Yhat), as.numeric(test.custo.df$Reached.on.Time_Y.N) )
+plot(performance(pred, "tpr", "fpr"))
+abline(0, 1, lty = 2)
+
+auc <- performance(pred,"auc")
+auc.name <- auc@y.name[[1]]
+auc.value <- round(auc@y.values[[1]], digits = 3)
+paste(auc.name, "is"   , auc.value)
+```
+
+```{r}
+# ROC curve for logistic regression is 0.72
+pred.log.null <- predict(log.fit.log, test.custo.df, type = "response")
+pred <- prediction(as.numeric(pred.log.null), as.numeric(test.custo.df$Reached.on.Time_Y.N) )
+plot(performance(pred, "tpr", "fpr"))
+abline(0, 1, lty = 2)
+
+auc <- performance(pred,"auc")
+auc.name <- auc@y.name[[1]]
+auc.value <- round(auc@y.values[[1]], digits = 3)
+paste(auc.name, "is"   , auc.value)
+```
+
+```{r}
+# ROC curve for random forest is 0.659
+Yhat <- predict(best.model[[3]], newdata=testX.custo.df[,-10])
+pred <- prediction(as.numeric(Yhat), as.numeric(test.custo.df$Reached.on.Time_Y.N) )
+plot(performance(pred, "tpr", "fpr"))
+abline(0, 1, lty = 2)
+
+auc <- performance(pred,"auc")
+auc.name <- auc@y.name[[1]]
+auc.value <- round(auc@y.values[[1]], digits = 3)
+paste(auc.name, "is"   , auc.value)
+```
 # Cross validation
 ```{r}
 k<- 10
