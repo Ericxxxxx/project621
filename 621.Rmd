@@ -13,6 +13,8 @@ library(lmtest)
 library(leaps)
 library(boot)
 library(ISLR)
+library(randomForest)
+library(tree)
 ```
 
 
@@ -53,7 +55,7 @@ train.custo.index <- sample(1:nrow(data_inUse), 0.6 * nrow(data_inUse))
 train.custo.df <- data_inUse[train.custo.index, ]
 testX.custo.df <- data_inUse[-train.custo.index, -10]
 testY.custo.df <- data_inUse[-train.custo.index, 10]
-
+test.custo.df<- data_inUse[-train.custo.index, ]
 str(train.custo.df)
 ```
 
@@ -96,9 +98,11 @@ log.odds.log <- coef(log.fit.log)
 odds.log <- exp(log.odds.log)
 options(scipen=4) 
 print(cbind("Log-Odds-Transform"=log.odds.log, "Odds-Transform"=odds.log), digits=2)
+pred.log.null <- predict(log.fit.log, testX.custo.df, type = "response")
+pred.result.logNull <- ifelse(pred.log.null > 0.5, 1,0)
 
 pred.accuracyRate.log <- sum(pred.result.logNull == testY.custo.df)/length(pred.result.logNull)
-pred.accuracyRate.log #0.632
+pred.accuracyRate.log #0.634
 
 
 ```
@@ -173,28 +177,26 @@ regsub<- regsubsets(Reached.on.Time_Y.N~., data=train.custo.df, nvmax=20, method
 plot(regsub, scale='bic')
 ```
 
-# Bootstrap Aggregation Regression Tree
+# Classification Tree
 ```{r}
-data.bag <- randomForest(Reached.on.Time_Y.N ~ Customer_care_calls +   
-                     Cost_of_the_Product + log.Prior_purchases + 
-                     log.Discount_offered + Weight_in_gms  + 
-                     Product_importance, data=train.custo.df, mtry = 6, importance=T)
-data.bag
-varImpPlot(data.bag) 
-importance(data.bag)
-pred_bag<- predict(data.bag, newdata = testX.custo.df[, -10])
-acc.rate.bag<- sum(pred_bag==testX.custo.df[, 10])/nrow(testX.custo.df)
-acc.rate.bag
-# The accuracy is 66%
+product.tree <- tree(as.factor(Reached.on.Time_Y.N) ~ Customer_care_calls+
+                       Cost_of_the_Product+log.Discount_offered+ 
+                       Weight_in_gms+Product_importance+ log.Prior_purchases
+                     ,data=train.custo.df,mindev=0.001)
+summary(product.tree)
+plot(product.tree)
+text(product.tree, pretty=0, cex=0.5)
+title("Classification Tree")
 ```
 ```{r}
-log(train.custo.df$Prior_purchases)
+Yhat<- predict(product.tree, test.custo.df, type='class')
+mean(Yhat==test.custo.df$Reached.on.Time_Y.N)
 ```
 
 # Compared the accuracy rate of three models
 ```{r}
-plot<- data.frame(Model=factor(c('Logistic Regression', 'Random Forest', 'Bootstrap Aggregation Regression Tree')),
-                  acc.rate=c(0.632, 0.668, 0.66))
+plot<- data.frame(Model=factor(c('Logistic Regression', 'Random Forest', 'Classification Tree')),
+                  acc.rate=c(0.632, 0.66, 0.688))
 ggplot(plot, aes(reorder(Model, acc.rate),acc.rate)) + 
   geom_col() + theme_bw() + labs(title = "Accuracy Rate by Model") + 
   xlab("Model") + ylab("Accuracy Rate") + coord_flip()
