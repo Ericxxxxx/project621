@@ -171,12 +171,6 @@ acc.rate[3]
 ```
 
 
-```{r}
-## Now need specification
-regsub<- regsubsets(Reached.on.Time_Y.N~., data=train.custo.df, nvmax=20, method='backward')
-plot(regsub, scale='bic')
-```
-
 # Classification Tree
 ```{r}
 product.tree <- tree(as.factor(Reached.on.Time_Y.N) ~ Customer_care_calls+
@@ -192,7 +186,27 @@ title("Classification Tree")
 Yhat<- predict(product.tree, test.custo.df, type='class')
 mean(Yhat==test.custo.df$Reached.on.Time_Y.N)
 ```
-
+```{r}
+pred.tree.null <- predict(product.tree, test.custo.df, type = "class")
+conf.mat<- table(pred.tree.null, test.custo.df$Reached.on.Time_Y.N)
+```
+```{r}
+# The confusion matrix for classification tree
+TruN <- conf.mat[1,1] 
+TruP <- conf.mat[2,2] 
+FalP <- conf.mat[2,1] 
+FalN <- conf.mat[1,2]
+TotP <- TruP + FalN 
+TotN <- TruN + FalP 
+Tot <- TotN + TotP 
+Accuracy <- (TruN + TruP) / Tot
+Error <- (FalN + FalP) / Tot
+Sensitivity <- TruP / Tot
+Specificity <- TruN / TotN
+FalsePos <- 1 - Specificity
+logit.rates.50<- cbind(Accuracy, Error, Sensitivity, Specificity, FalsePos)
+print(logit.rates.50,  digits=2)
+```
 # Compared the accuracy rate of three models
 ```{r}
 plot<- data.frame(Model=factor(c('Logistic Regression', 'Random Forest', 'Classification Tree')),
